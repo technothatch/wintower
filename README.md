@@ -38,6 +38,7 @@ go install github.com/technothatch/wintower@latest
 | `s` | start selected service |
 | `t` | restart selected service |
 | `x` | stop selected service / kill selected process |
+| `p` | change priority of selected process (Idle … High) |
 | `y` | confirm the pending action |
 | `q` / `ctrl+c` | quit |
 
@@ -49,8 +50,10 @@ Honest technical notes, because tools should say what they actually do:
 
 - **Services tab** talks to the Windows Service Control Manager through the native Win32 API
   (`golang.org/x/sys/windows/svc/mgr`). No `sc.exe` shelling out.
-- **Processes tab** enumerates processes with `EnumProcesses` and terminates with `TerminateProcess`.
-  Access-denied processes (system, other users) are listed but cannot be killed without elevation — that's Windows, not a bug.
+- **Processes tab** enumerates processes with `EnumProcesses`, terminates with `TerminateProcess`,
+  and changes scheduling priority with `SetPriorityClass`. Realtime priority is intentionally not
+  offered — it can starve the whole machine. Access-denied processes (system, other users) are
+  listed but cannot be changed without elevation — that's Windows, not a bug.
 - **Event Log tab** tails the newest 100 Critical/Error/Warning entries from the `System` log via
   `Get-WinEvent` (the one place a PowerShell helper is the sane implementation).
 - On non-Windows systems the binary still builds and runs; the data tabs explain that they need Windows.

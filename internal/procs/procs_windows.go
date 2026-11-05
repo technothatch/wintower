@@ -12,7 +12,10 @@ import (
 
 var (
 	psapi                = windows.NewLazySystemDLL("psapi.dll")
+	kernel32             = windows.NewLazySystemDLL("kernel32.dll")
 	procGetProcessMemory = psapi.NewProc("GetProcessMemoryInfo")
+	procGetPriorityClass = kernel32.NewProc("GetPriorityClass")
+	procSetPriorityClass = kernel32.NewProc("SetPriorityClass")
 )
 
 type processMemoryCountersEx struct {
@@ -54,6 +57,14 @@ func processMem(h windows.Handle) uint64 {
 	return uint64(counters.WorkingSetSize)
 }
 
+func processPriority(h windows.Handle) uint32 {
+	r, _, _ := procGetPriorityClass.Call(uintptr(h))
+	if r == 0 {
+		return 0
+	}
+	return uint32(r)
+}
+
 func List() ([]Proc, error) {
 	buf := make([]uint32, 4096)
 	for {
@@ -79,6 +90,7 @@ func List() ([]Proc, error) {
 		}
 		if h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid); err == nil {
 			p.MemBytes = processMem(h)
+			p.Priority = PriorityName(processPriority(h))
 			windows.CloseHandle(h)
 		}
 		out = append(out, p)
@@ -94,6 +106,24 @@ func Kill(pid uint32) error {
 	defer windows.CloseHandle(h)
 	if err := windows.TerminateProcess(h, 1); err != nil {
 		return fmt.Errorf("terminate process %d: %w", pid, err)
+	}
+	return nil
+}
+
+// SetPriority changes the priority class of a process. Requires
+// PROCESS_SET_INFORMATION, which fails for processes owned by other users
+// (unless elevated) — the error is passed through to the UI.
+func SetPriority(pid uint32, class uint32) error {
+	h, err := windows.OpenProcess(windows.PROCESS_SET_INFORMATION|windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
+	if err != nil {
+		return fmt.Errorf("open process %d: %w", pid, err)
+	}
+	defer windows.CloseHandle(h)
+	if r, _, callErr := procSetPriorityClass.Call(uintptr(h), uintptr(class)); r == 0 {
+		if callErr != windows.ERROR_SUCCESS {
+			return fmt.Errorf("set priority of %d: %w", pid, callErr)
+		}
+		return fmt.Errorf("set priority of %d: unknown error", pid)
 	}
 	return nil
 }

@@ -39,18 +39,20 @@ type eventsMsg struct {
 type actionDoneMsg struct{ err error }
 
 type model struct {
-	version  string
-	width    int
-	height   int
-	active   tab
-	status   string
-	confirm  string
-	services table.Model
-	procs    table.Model
-	events   table.Model
-	svcRows  []services.Service
-	procRows []procs.Proc
-	loading  bool
+	version   string
+	width     int
+	height    int
+	active    tab
+	status    string
+	confirm   string
+	prioMenu  bool
+	prioIndex int
+	services  table.Model
+	procs     table.Model
+	events    table.Model
+	svcRows   []services.Service
+	procRows  []procs.Proc
+	loading   bool
 }
 
 func newTable(header []table.Column) table.Model {
@@ -77,8 +79,9 @@ func New(version string) model {
 		}),
 		procs: newTable([]table.Column{
 			{Title: "PID", Width: 8},
-			{Title: "Name", Width: 46},
-			{Title: "Memory (MB)", Width: 14},
+			{Title: "Name", Width: 40},
+			{Title: "Memory (MB)", Width: 12},
+			{Title: "Priority", Width: 13},
 		}),
 		events: newTable([]table.Column{
 			{Title: "Time", Width: 20},
@@ -138,7 +141,7 @@ func (m *model) setProcRows(items []procs.Proc) {
 	m.procRows = items
 	rows := make([]table.Row, len(items))
 	for i, p := range items {
-		rows[i] = table.Row{fmt.Sprintf("%d", p.PID), p.Name, formatMem(p.MemBytes)}
+		rows[i] = table.Row{fmt.Sprintf("%d", p.PID), p.Name, formatMem(p.MemBytes), p.Priority}
 	}
 	m.procs.SetRows(rows)
 }
@@ -248,6 +251,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.prioMenu {
+			switch msg.String() {
+			case "esc", "q":
+				m.prioMenu = false
+				m.status = "cancelled"
+			case "up", "k":
+				if m.prioIndex > 0 {
+					m.prioIndex--
+				}
+			case "down", "j":
+				if m.prioIndex < len(procs.Priorities)-1 {
+					m.prioIndex++
+				}
+			case "enter":
+				if p, ok := m.selectedProc(); ok {
+					opt := procs.Priorities[m.prioIndex]
+					m.prioMenu = false
+					m.loading = true
+					m.status = fmt.Sprintf("setting %s (pid %d) to %s…", p.Name, p.PID, opt.Name)
+					return m, func() tea.Msg {
+						return actionDoneMsg{err: procs.SetPriority(p.PID, opt.Class)}
+					}
+				}
+				m.prioMenu = false
+			}
+			return m, nil
+		}
 		if m.confirm != "" {
 			switch msg.String() {
 			case "y", "Y":
@@ -341,6 +371,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = fmt.Sprintf("kill %s (pid %d)? press y to confirm", p.Name, p.PID)
 			}
 			return m, nil
+		case "p", "P":
+			if p, ok := m.selectedProc(); ok {
+				m.prioMenu = true
+				m.prioIndex = 0
+				for i, opt := range procs.Priorities {
+					if opt.Name == p.Priority {
+						m.prioIndex = i
+						break
+					}
+				}
+				m.status = fmt.Sprintf("priority for %s (pid %d): up/down select · enter apply · esc cancel", p.Name, p.PID)
+			}
+			return m, nil
 		}
 
 		var cmd tea.Cmd
@@ -390,12 +433,24 @@ func (m model) View() string {
 	}
 
 	b.WriteString("\n")
+	if m.prioMenu {
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render("Priority") + "\n")
+		for i, opt := range procs.Priorities {
+			cursor := "  "
+			style := lipgloss.NewStyle()
+			if i == m.prioIndex {
+				cursor = "> "
+				style = style.Foreground(lipgloss.Color("212")).Bold(true)
+			}
+			b.WriteString(style.Render(cursor+opt.Name) + "\n")
+		}
+	}
 	if m.loading {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render("loading…") + "\n")
 	}
 	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("210")).Render(m.status) + "\n")
 	b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(
-		"tab/h/l switch · 1-4 jump · r refresh · s start · t restart · x stop/kill · y confirm · q quit",
+		"tab/h/l switch · 1-4 jump · r refresh · s start · t restart · x stop/kill · p priority · y confirm · q quit",
 	))
 	return b.String()
 }
@@ -407,7 +462,8 @@ A terminal cockpit for Windows: services, processes and the System event log
 in one keyboard-driven UI.
 
  · Services tab talks to the Windows Service Control Manager natively.
- · Processes tab enumerates processes via the Win32 API.
+ · Processes tab enumerates processes via the Win32 API, can kill them and
+   change their priority class (Idle … High; Realtime intentionally omitted).
  · Event Log tab tails Critical/Error/Warning entries from the System log.
 
 Project: https://github.com/technothatch/wintower

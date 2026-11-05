@@ -9,3 +9,7 @@ func List() ([]Proc, error) {
 func Kill(pid uint32) error {
 	return ErrUnsupported
 }
+
+func SetPriority(pid uint32, class uint32) error {
+	return ErrUnsupported
+}
