@@ -3,7 +3,7 @@
 **A terminal cockpit for Windows: services, processes and the System event log in one keyboard-driven TUI.**
 
 Windows has `services.msc`, `taskmgr.exe` and `eventvwr.msc` — three heavy GUIs for three everyday jobs.
-`wintower` puts all three in your terminal, keyboard-first, in a single 2 MB binary with no runtime dependencies.
+`wintower` puts all three in your terminal, keyboard-first, in a single ~4 MB binary with no runtime dependencies.
 
 ```
 wintower v0.1.0  Services  Processes  Event Log  About
