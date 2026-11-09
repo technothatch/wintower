@@ -18,6 +18,10 @@ start Spooler? press y to confirm
 tab/h/l switch · 1-4 jump · r refresh · s start · t restart · x stop/kill · y confirm · q quit
 ```
 
+> **The story behind it:** [A terminal control room for Windows](https://technothatch.iyre.com/blog/wintower-inside-the-project/)
+> — the TechnoThatch journal piece on why `services.msc`, `taskmgr.exe` and `eventvwr.msc`
+> became one TUI.
+
 ## Install
 
 **Prebuilt binaries:** download `wintower-amd64.exe` (or `arm64`) from [Releases](../../releases), drop it on your `PATH`.
